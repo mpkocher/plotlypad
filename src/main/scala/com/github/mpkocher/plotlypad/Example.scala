@@ -276,6 +276,27 @@ object HtmlConverters {
   }
 }
 
+object HtmlConvertersImplicits {
+  import Models._
+  import HtmlConverters._
+
+  implicit val convertBarPlotter = HtmlConverters.ConvertBarPlot
+  implicit val convertHistogramPlotter = HtmlConverters.ConvertHistogramPlot
+  implicit val convertScatterPlotter = HtmlConverters.ConvertScatterPlot
+
+    def convertToHtml[T <: Plot](p: T)(implicit converter: BaseConverter[T]): Text.TypedTag[String] =
+      converter.toHtml(p)
+
+    def writeToHtml[T <: Plot](p: T, output: Path)(implicit converter: BaseConverter[T]): Path =
+      converter.writeHtml(p, output)
+
+    // FIXME. There can only be one implicit, helper must explicit for now
+    def writeToPng[T <: Plot](p: T, output: Path, helper: SeleniumHelper)(implicit converter: BaseConverter[T]): Path =
+      converter.writePng(p, output)(helper)
+
+
+}
+
 
 object ExamplePlots {
 
@@ -355,6 +376,28 @@ object ExamplePlots {
 
   }
 
+  def barPlotImplicitDemo(helper: SeleniumHelper, outputDir: Path) = {
+    import HtmlConvertersImplicits._
+
+    val barOutputHtml = toPath(outputDir, "bar-plot2.html")
+    val barOutputPng = toPath(outputDir, "bar-plot2.png")
+
+    println(s"Generating BarChart to $barOutputHtml")
+
+    val barLayout = Layout("Bar Chart", "X-label", "Y-label")
+    val xs = (0 to 30).map(_.toDouble)
+    val ys = xs.map(i => i * i)
+    val barPlot = BarPlot(xs, ys, barLayout)
+
+    // Implicits will convert the types
+    writeToHtml(barPlot, barOutputHtml)
+    writeToPng(barPlot, barOutputPng, helper)
+
+
+  }
+
+
+
 
   /*
   Example Demo of Testing
@@ -368,6 +411,8 @@ object ExamplePlots {
     barPlotDemo(sx, rootOutputPath)
 
     scatterPlotDemo(sx, rootOutputPath)
+
+    barPlotImplicitDemo(sx, rootOutputPath)
 
     0
   }
