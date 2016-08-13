@@ -3,6 +3,8 @@ package com.github.mpkocher.plotlypad
 import java.io.{BufferedWriter, File, FileWriter}
 import java.nio.file.{Files, Path, Paths}
 
+import scala.sys.process._
+
 import com.github.mpkocher.plotlypad.Models.{BarPlot, Layout}
 import com.github.mpkocher.plotlypad.SeleniumUtils.SeleniumHelper
 import org.apache.commons.io.FileUtils
@@ -31,7 +33,10 @@ object Models {
     val layout: T
   }
 
-  trait Plot
+  trait Plot {
+    // Plotly Plot Type
+    val plotType: String
+  }
 
   case class Layout(title: String, xlabel: String, ylabel: String) extends BaseLayout
 
@@ -39,9 +44,9 @@ object Models {
 
   // There needs to be a NumberLike trait from breeze to support Int or Double. Using HistogramPlot[T] datum: Seq[T]
   // creates JSON seralization headaches
-  case class HistogramPlot(datum: Seq[Double], layout: HistogramLayout) extends LayoutAble[HistogramLayout] with Plot
-  case class BarPlot(x: Seq[Double], y: Seq[Double], layout: Layout) extends LayoutAble[Layout] with Plot
-  case class ScatterPlot(x: Seq[Double], y: Seq[Double], layout: Layout) extends LayoutAble[Layout] with Plot
+  case class HistogramPlot(datum: Seq[Double], layout: HistogramLayout) extends LayoutAble[HistogramLayout] with Plot { val plotType = "histogram"}
+  case class BarPlot(x: Seq[Double], y: Seq[Double], layout: Layout) extends LayoutAble[Layout] with Plot {val plotType = "bar"}
+  case class ScatterPlot(x: Seq[Double], y: Seq[Double], layout: Layout) extends LayoutAble[Layout] with Plot {val plotType = "scatter"}
 
 }
 
@@ -58,7 +63,7 @@ object ModelJsonProtocols extends ModelJsonProtocols
 
 
 object SeleniumUtils {
-  case class SeleniumHelper(timeOut: Int) {
+  case class SeleniumHelper(timeOut: Long) {
     def waitFor(driver: WebDriver, f: (WebDriver) => WebElement): WebElement = {
       new WebDriverWait(driver, timeOut).until(
         new ExpectedCondition[WebElement] {
@@ -102,10 +107,21 @@ object HtmlConverters {
     png
   }
 
+  /**
+    * Util for opening up the output HTML file in default browser. This is system dependent and it's using
+    * the OSX "open" command.
+    *
+    * TODO: Add support for loading from `xdg-open` on linux
+    * @param html
+    */
+  def showHtml(html: Path) = {
+    val cmds = Seq("open", html.toAbsolutePath.toString)
+    println(s"Opening html in browser $cmds")
+    cmds.!!
+  }
+
 
   trait BaseConverter[T <: Plot] {
-
-    val PLOT_TYPE: String
 
     val DEFAULT_PLOT_DIV_ID = "pbplot"
     val DEFAULT_PLOT_WIDTH = 1200
@@ -128,7 +144,6 @@ object HtmlConverters {
   }
 
   object ConvertHistogramPlot extends BaseConverter[HistogramPlot] {
-    val PLOT_TYPE = "histogram"
 
     def toHtml(p: HistogramPlot, width: Int = DEFAULT_PLOT_WIDTH, height: Int = DEFAULT_PLOT_HEIGHT) = {
       // Generate String rep of datum of the form [1,2,3,4]
@@ -159,7 +174,7 @@ object HtmlConverters {
                |                },
                |            opacity: 0.75,
                |            x: xs,
-               |            type: '$PLOT_TYPE'
+               |            type: '${p.plotType}'
                |        }
                |    ];
                |
@@ -180,7 +195,6 @@ object HtmlConverters {
   }
 
   object ConvertBarPlot extends BaseConverter[BarPlot] {
-    val PLOT_TYPE = "bar"
     def toHtml(p: BarPlot,width: Int = DEFAULT_PLOT_WIDTH, height: Int = DEFAULT_PLOT_HEIGHT) = {
 
       def toS(xs: Seq[Double]) =  "[" + xs.map(_.toString).reduceLeft[String] {(acc, n) => acc + "," + n.toString } + "]"
@@ -209,7 +223,7 @@ object HtmlConverters {
                |            opacity: 0.75,
                |            x: xs,
                |            y: ys,
-               |            type: '$PLOT_TYPE'
+               |            type: '${p.plotType}'
                |        }
                |    ];
                |
@@ -229,7 +243,6 @@ object HtmlConverters {
   }
 
   object ConvertScatterPlot extends BaseConverter[ScatterPlot] {
-    val PLOT_TYPE = "scatter"
     def toHtml(p: ScatterPlot, width: Int = DEFAULT_PLOT_WIDTH, height: Int = DEFAULT_PLOT_HEIGHT) = {
 
       def toS(xs: Seq[Double]) =  "[" + xs.map(_.toString).reduceLeft[String] {(acc, n) => acc + "," + n.toString } + "]"
@@ -258,7 +271,7 @@ object HtmlConverters {
                |            opacity: 0.75,
                |            x: xs,
                |            y: ys,
-               |            type: '$PLOT_TYPE'
+               |            type: '${p.plotType}'
                |        }
                |    ];
                |
@@ -295,6 +308,14 @@ object HtmlConvertersImplicits {
     // FIXME. There can only be one implicit, helper must explicit for now
     def writeToPng[T <: Plot](p: T, output: Path, helper: SeleniumHelper)(implicit converter: BaseConverter[T]): Path =
       converter.writePng(p, output)(helper)
+
+    // See `{{ show }}` comments. This is OS specific. OSX is only supported
+    def showPlot[T <: Plot](p: T, output: Option[Path] = None)(implicit converter: BaseConverter[T]): Path = {
+      val outputHtml = output.getOrElse(Files.createTempFile("plotlypad", s"plot_${p.plotType}.html"))
+      writeToHtml(p, outputHtml)
+      showHtml(outputHtml)
+      outputHtml
+    }
 
 
 }
@@ -366,11 +387,11 @@ object ExamplePlots {
     */
   def histogramPlotDemo(helper: SeleniumHelper, outputDir: Path) = {
 
-    val nvalues = 100
+    val numValues = 1000
 
     val nx = new Gaussian(0, 0.5)
 
-    val exampleDatum = nx.sample(nvalues)
+    val exampleDatum = nx.sample(numValues)
 
     val outputHtml = toPath(outputDir, "histogram-plot.html")
     val outputPng = toPath(outputDir, "histogram-plot.png")
@@ -393,7 +414,7 @@ object ExamplePlots {
     println(s"Generating BarChart to $barOutputHtml")
 
     val barLayout = Layout("Bar Chart", "X-label", "Y-label")
-    val xs = (0 to 30).map(_.toDouble)
+    val xs = (0 to 100).map(_.toDouble)
     val ys = xs.map(i => i * i)
     val barPlot = BarPlot(xs, ys, barLayout)
 
