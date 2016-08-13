@@ -4,6 +4,21 @@ version := "0.1.0"
 
 scalaVersion := "2.11.8"
 
+// http://blog.threatstack.com/useful-scalac-options-for-better-scala-development-part-1
+scalacOptions ++= Seq(
+  "-target:jvm-1.8",
+  "-encoding", "UTF-8",
+  "-unchecked",
+  "-deprecation",
+  "-Xfuture",
+  "-Yno-adapted-args",
+  "-Ywarn-dead-code",
+  "-Ywarn-numeric-widen",
+  "-Ywarn-value-discard",
+  "-Ywarn-unused"
+)
+
+
 libraryDependencies ++= Seq(
   "org.scalanlp" % "breeze_2.11" % "0.12",
   "co.theasi" % "plotly_2.11" % "0.1",
