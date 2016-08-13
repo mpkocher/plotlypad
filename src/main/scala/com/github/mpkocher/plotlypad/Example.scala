@@ -48,6 +48,8 @@ object Models {
 trait ModelJsonProtocols {
   import Models._
 
+  // It might be cleaner to encapsulate the entire plotly model (for each plot type), then convert to JSON.
+  // This would reduce the js writing layer
   implicit val histogramLayoutFormat = jsonFormat5(HistogramLayout)
   implicit val histogramFormat = jsonFormat2(HistogramPlot)
 }
@@ -311,8 +313,8 @@ object ExamplePlots {
   /**
     * BarPlot Demo
     *
-    * @param helper
-    * @param outputDir
+    * @param helper    Selenium Helper
+    * @param outputDir Root Output Directory of output html and png
     */
   def barPlotDemo(helper: SeleniumHelper, outputDir: Path) = {
 
@@ -335,8 +337,8 @@ object ExamplePlots {
   /**
     * Scatter Plot Demo
     *
-    * @param helper
-    * @param outputDir
+    * @param helper    Selenium Helper
+    * @param outputDir Root Output Directory of output html and png
     */
   def scatterPlotDemo(helper: SeleniumHelper, outputDir: Path) = {
 
@@ -356,6 +358,12 @@ object ExamplePlots {
 
   }
 
+  /**
+    * Histogram Plot Demo
+    *
+    * @param helper    Selenium Helper
+    * @param outputDir Root Output Directory of output html and png
+    */
   def histogramPlotDemo(helper: SeleniumHelper, outputDir: Path) = {
 
     val nvalues = 100
@@ -400,7 +408,7 @@ object ExamplePlots {
 
 
   /*
-  Example Demo of Testing
+  Example Demo for Testing
    */
   def demo(rootOutputPath: Path) = {
 
