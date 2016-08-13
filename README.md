@@ -14,13 +14,17 @@ HTML files and png images will be generated in `extras/`
 
 ### Ammonite REPL integration
 
-TODO
+Install Ammnoite `brew install ammonite-repl`
 
-Example:
+Example/Demo:
 
 ```bash
 $> /usr/local/bin/amm -f extras/Repl.scala
 ```
+
+Running `showPlot(plot)` in the repl will open the plot in the default browser.
+
+Example Predef.scala file for Ammonite
 
 ```scala
 import ammonite.ops._
