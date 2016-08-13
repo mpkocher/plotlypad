@@ -16,4 +16,5 @@ project/plugins/project/
 .scala_dependencies
 .worksheet
 
-extras/pad-*.html
+extras/*.html
+extras/*.png
