@@ -115,9 +115,7 @@ object HtmlConverters {
     def writeHtml(p: T, output: Path): Path = {
       writeToHtml(toHtml(p), output)
     }
-  }
 
-  trait BaseImageConverter[T <: Plot] extends BaseConverter[T] {
     def writePng(p: T, output: Path)(implicit helper: SeleniumHelper): Path = {
       // FIXME
       val htmlPath = Paths.get(output.toAbsolutePath.toString + ".html")
@@ -126,7 +124,6 @@ object HtmlConverters {
       output
     }
   }
-
 
   object ConvertHistogramPlot extends BaseConverter[HistogramPlot] {
     val PLOT_TYPE = "histogram"
