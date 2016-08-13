@@ -9,12 +9,21 @@ Offline Scala plotting library using [plotly.js](https://cdn.plot.ly/plotly-late
 $> sbt run
 ```
 
-HTML files and png images will be generated in `extras/`
+Example HTML files and png images will be generated in `extras/`
 
 
-### Ammonite REPL integration
+# Ammonite REPL integration
 
-Install Ammnoite `brew install ammonite-repl`
+[Ammonite](https://github.com/lihaoyi/Ammonite) is a amazing tool in the expanding Scala ecosystem.
+
+See [expanded documentation here](http://www.lihaoyi.com/Ammonite/).
+ 
+Get Demo working locally:
+ 
+1. Install plotlypad locally via `sbt publish-local`
+2. Install ammonite `brew install ammonite-repl`
+3. Run `make repl` or `amm -f extras/Repl.scala` to get an example plot and some data
+4. (Optional) For generating png images, `FireFox` must be installed 
 
 Example/Demo:
 
