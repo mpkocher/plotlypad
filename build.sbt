@@ -1,6 +1,8 @@
 name := "plotlypad"
 
-version := "0.1.1"
+version := "0.1.5-SNAPSHOT"
+
+organization := "com.github.mpkocher"
 
 scalaVersion := "2.11.8"
 

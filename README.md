@@ -16,3 +16,51 @@ HTML files and png images will be generated in `extras/`
 
 TODO
 
+Example:
+
+```bash
+$> /usr/local/bin/amm -f extras/Repl.scala
+```
+
+```scala
+import ammonite.ops._
+import sys.process._
+import collection.mutable
+
+println("Loading plotlypad library")
+
+import $ivy.`com.github.mpkocher::plotlypad:0.1.5-SNAPSHOT`
+
+import java.nio.file.Paths
+import com.github.mpkocher.plotlypad._
+import Models._
+import HtmlConvertersImplicits._
+import SeleniumUtils._
+
+// Only required for saving png(s)
+val helper = new SeleniumHelper(100)
+
+// Define Test data for demo
+
+val xs = (0 to 10).map(_.toDouble)
+val ys = xs.map(i => 2 * i * i)
+val basicLayout = Layout("Ammonite Demo", "X-label", "Y-Label")
+
+val sp = ScatterPlot(xs, ys, basicLayout)
+
+val px = Paths.get("repl-test.html").toAbsolutePath
+
+//writeToHtml(sp, px)
+//println(s"Wrote demo scatter plot to $px")
+
+// Write to Png requires Selenium Driver
+//writeToPng(sp, px, helper)
+
+// Open up the Html page in the default browsers
+// val outputHtml = showPlot(sp)
+
+println("Finished loading. Run `showPlot(sp)` to open up an example plot in the default browser")
+
+```
+
+
