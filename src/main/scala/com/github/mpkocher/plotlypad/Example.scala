@@ -3,6 +3,10 @@ package com.github.mpkocher.plotlypad
 import java.io.{BufferedWriter, File, FileWriter}
 import java.nio.file.{Files, Path, Paths}
 
+import scala.sys.process._
+
+import com.github.mpkocher.plotlypad.Models.{BarPlot, Layout}
+import com.github.mpkocher.plotlypad.SeleniumUtils.SeleniumHelper
 import org.apache.commons.io.FileUtils
 
 import scalatags.Text
@@ -29,7 +33,10 @@ object Models {
     val layout: T
   }
 
-  trait Plot
+  trait Plot {
+    // Plotly Plot Type
+    val plotType: String
+  }
 
   case class Layout(title: String, xlabel: String, ylabel: String) extends BaseLayout
 
@@ -37,20 +44,50 @@ object Models {
 
   // There needs to be a NumberLike trait from breeze to support Int or Double. Using HistogramPlot[T] datum: Seq[T]
   // creates JSON seralization headaches
-  case class HistogramPlot(datum: Seq[Double], layout: HistogramLayout) extends LayoutAble[HistogramLayout] with Plot
-  case class BarPlot(x: Seq[Double], y: Seq[Double], layout: Layout) extends LayoutAble[Layout] with Plot
-  case class ScatterPlot(x: Seq[Double], y: Seq[Double], layout: Layout) extends LayoutAble[Layout] with Plot
+  case class HistogramPlot(datum: Seq[Double], layout: HistogramLayout) extends LayoutAble[HistogramLayout] with Plot { val plotType = "histogram"}
+  case class BarPlot(x: Seq[Double], y: Seq[Double], layout: Layout) extends LayoutAble[Layout] with Plot {val plotType = "bar"}
+  case class ScatterPlot(x: Seq[Double], y: Seq[Double], layout: Layout) extends LayoutAble[Layout] with Plot {val plotType = "scatter"}
 
 }
 
 trait ModelJsonProtocols {
   import Models._
 
+  // It might be cleaner to encapsulate the entire plotly model (for each plot type), then convert to JSON.
+  // This would reduce the js writing layer
   implicit val histogramLayoutFormat = jsonFormat5(HistogramLayout)
   implicit val histogramFormat = jsonFormat2(HistogramPlot)
 }
 
 object ModelJsonProtocols extends ModelJsonProtocols
+
+
+object SeleniumUtils {
+  case class SeleniumHelper(timeOut: Long) {
+    def waitFor(driver: WebDriver, f: (WebDriver) => WebElement): WebElement = {
+      new WebDriverWait(driver, timeOut).until(
+        new ExpectedCondition[WebElement] {
+          override def apply(d: WebDriver) = f(d)
+        })
+    }
+
+    def convertToPng(path: Path, outputPath: Path) = {
+      val driver: WebDriver = new FirefoxDriver
+
+      val ux = path.toUri.toURL
+      println(s"Getting $ux")
+
+      driver.get(ux.toString)
+
+      val screenShotFile: File = driver.asInstanceOf[TakesScreenshot].getScreenshotAs(OutputType.FILE)
+
+      println(s"Wrote file to $outputPath")
+      FileUtils.copyFile(screenShotFile, outputPath.toFile)
+
+      //waitFor(driver, _.findElement(By.className("module module-Menu")))
+    }
+  }
+}
 
 
 object HtmlConverters {
@@ -65,10 +102,26 @@ object HtmlConverters {
     output
   }
 
+  def writeToPng(html: Path, png: Path)(implicit helper: SeleniumHelper): Path = {
+    helper.convertToPng(html, png)
+    png
+  }
+
+  /**
+    * Util for opening up the output HTML file in default browser. This is system dependent and it's using
+    * the OSX "open" command.
+    *
+    * TODO: Add support for loading from `xdg-open` on linux
+    * @param html
+    */
+  def showHtml(html: Path) = {
+    val cmds = Seq("open", html.toAbsolutePath.toString)
+    println(s"Opening html in browser $cmds")
+    cmds.!!
+  }
+
 
   trait BaseConverter[T <: Plot] {
-
-    val PLOT_TYPE: String
 
     val DEFAULT_PLOT_DIV_ID = "pbplot"
     val DEFAULT_PLOT_WIDTH = 1200
@@ -80,10 +133,17 @@ object HtmlConverters {
     def writeHtml(p: T, output: Path): Path = {
       writeToHtml(toHtml(p), output)
     }
+
+    def writePng(p: T, output: Path)(implicit helper: SeleniumHelper): Path = {
+      // FIXME
+      val htmlPath = Paths.get(output.toAbsolutePath.toString + ".html")
+      writeHtml(p, htmlPath)
+      writeToPng(htmlPath, output)
+      output
+    }
   }
 
   object ConvertHistogramPlot extends BaseConverter[HistogramPlot] {
-    val PLOT_TYPE = "histogram"
 
     def toHtml(p: HistogramPlot, width: Int = DEFAULT_PLOT_WIDTH, height: Int = DEFAULT_PLOT_HEIGHT) = {
       // Generate String rep of datum of the form [1,2,3,4]
@@ -114,7 +174,7 @@ object HtmlConverters {
                |                },
                |            opacity: 0.75,
                |            x: xs,
-               |            type: '$PLOT_TYPE'
+               |            type: '${p.plotType}'
                |        }
                |    ];
                |
@@ -135,7 +195,6 @@ object HtmlConverters {
   }
 
   object ConvertBarPlot extends BaseConverter[BarPlot] {
-    val PLOT_TYPE = "bar"
     def toHtml(p: BarPlot,width: Int = DEFAULT_PLOT_WIDTH, height: Int = DEFAULT_PLOT_HEIGHT) = {
 
       def toS(xs: Seq[Double]) =  "[" + xs.map(_.toString).reduceLeft[String] {(acc, n) => acc + "," + n.toString } + "]"
@@ -164,7 +223,7 @@ object HtmlConverters {
                |            opacity: 0.75,
                |            x: xs,
                |            y: ys,
-               |            type: '$PLOT_TYPE'
+               |            type: '${p.plotType}'
                |        }
                |    ];
                |
@@ -184,7 +243,6 @@ object HtmlConverters {
   }
 
   object ConvertScatterPlot extends BaseConverter[ScatterPlot] {
-    val PLOT_TYPE = "scatter"
     def toHtml(p: ScatterPlot, width: Int = DEFAULT_PLOT_WIDTH, height: Int = DEFAULT_PLOT_HEIGHT) = {
 
       def toS(xs: Seq[Double]) =  "[" + xs.map(_.toString).reduceLeft[String] {(acc, n) => acc + "," + n.toString } + "]"
@@ -213,7 +271,7 @@ object HtmlConverters {
                |            opacity: 0.75,
                |            x: xs,
                |            y: ys,
-               |            type: '$PLOT_TYPE'
+               |            type: '${p.plotType}'
                |        }
                |    ];
                |
@@ -233,76 +291,157 @@ object HtmlConverters {
   }
 }
 
+object HtmlConvertersImplicits {
+  import Models._
+  import HtmlConverters._
 
-object ExampleDriver {
+  implicit val convertBarPlotter = HtmlConverters.ConvertBarPlot
+  implicit val convertHistogramPlotter = HtmlConverters.ConvertHistogramPlot
+  implicit val convertScatterPlotter = HtmlConverters.ConvertScatterPlot
 
-  case class SeleniumHelper(timeOut: Int) {
-    def waitFor(driver: WebDriver, f: (WebDriver) => WebElement): WebElement = {
-      new WebDriverWait(driver, timeOut).until(
-        new ExpectedCondition[WebElement] {
-          override def apply(d: WebDriver) = f(d)
-        })
+    def convertToHtml[T <: Plot](p: T)(implicit converter: BaseConverter[T]): Text.TypedTag[String] =
+      converter.toHtml(p)
+
+    def writeToHtml[T <: Plot](p: T, output: Path)(implicit converter: BaseConverter[T]): Path =
+      converter.writeHtml(p, output)
+
+    // FIXME. There can only be one implicit, helper must explicit for now
+    def writeToPng[T <: Plot](p: T, output: Path, helper: SeleniumHelper)(implicit converter: BaseConverter[T]): Path =
+      converter.writePng(p, output)(helper)
+
+    // See `{{ show }}` comments. This is OS specific. OSX is only supported
+    def showPlot[T <: Plot](p: T, output: Option[Path] = None)(implicit converter: BaseConverter[T]): Path = {
+      val outputHtml = output.getOrElse(Files.createTempFile("plotlypad", s"plot_${p.plotType}.html"))
+      writeToHtml(p, outputHtml)
+      showHtml(outputHtml)
+      outputHtml
     }
 
-    def convertToPng(path: Path, outputPath: Path) = {
-      val driver: WebDriver = new FirefoxDriver
 
-      val ux = path.toUri.toURL
-      println(s"Getting $ux")
+}
 
-      driver.get(ux.toString)
 
-      val screenShotFile: File = driver.asInstanceOf[TakesScreenshot].getScreenshotAs(OutputType.FILE)
+object ExamplePlots {
 
-      println(s"Wrote file to $outputPath")
-      FileUtils.copyFile(screenShotFile, outputPath.toFile)
+  import Models._
+  import HtmlConverters._
 
-      //waitFor(driver, _.findElement(By.className("module module-Menu")))
-    }
-  }
 
-  /*
-  Example Demo of Testing
-   */
-  def demo(path: Path) = {
+  private def toPath(rootOutputPath: Path, fname: String) =
+    rootOutputPath.toAbsolutePath.resolve(fname)
 
-    import Models._
-    import HtmlConverters._
-    val sx = SeleniumHelper(100)
 
-    val nvalues = 100
+  /**
+    * BarPlot Demo
+    *
+    * @param helper    Selenium Helper
+    * @param outputDir Root Output Directory of output html and png
+    */
+  def barPlotDemo(helper: SeleniumHelper, outputDir: Path) = {
 
-    val nx = new Gaussian(0, 0.5)
+    val barOutputHtml = toPath(outputDir, "bar-plot.html")
+    val barOutputPng = toPath(outputDir, "bar-plot.png")
 
-    val exampleDatum = nx.sample(nvalues)
-
-    println(s"Generating HistogramPlot $path")
-    val histogramLayout = HistogramLayout("Histogram Title", "X-label", "Y-label", 0.05)
-    val histogram = HistogramPlot(exampleDatum, histogramLayout)
-
-    val html = ConvertHistogramPlot.toHtml(histogram)
-    writeToHtml(html, path)
-
-    //sx.convertToPng(path, path.toAbsolutePath.)
-
-    val barOutput = path.getParent.resolve("bar-plot.html")
-    println(s"Generating BarChart to $barOutput")
+    println(s"Generating BarChart to $barOutputHtml")
 
     val barLayout = Layout("Bar Chart", "X-label", "Y-label")
     val xs = (0 to 5).map(_ * 1.0)
     val ys = xs.map(i => i * i)
     val barPlot = BarPlot(xs, ys, barLayout)
 
-    val barHtml = ConvertBarPlot.writeHtml(barPlot, barOutput)
+    val barHtml = ConvertBarPlot.writeHtml(barPlot, barOutputHtml)
+    writeToPng(barOutputHtml, barOutputPng)(helper)
+
     println(s"Wrote $barHtml")
+  }
 
+  /**
+    * Scatter Plot Demo
+    *
+    * @param helper    Selenium Helper
+    * @param outputDir Root Output Directory of output html and png
+    */
+  def scatterPlotDemo(helper: SeleniumHelper, outputDir: Path) = {
+
+    val layout = Layout("Scatter Plot Demo", "X-Label", "Y-Label")
     println("Generating Scatter Plot")
-    val scatterLayout = barLayout.copy(title = "Scatter Plot Demo")
-    val scatterPlot = ScatterPlot(xs, ys, scatterLayout)
-    val scatterOutput =  path.getParent.resolve("scatter-plot.html")
 
-    val scatterHtml = ConvertScatterPlot.writeHtml(scatterPlot, scatterOutput)
-    println(s"Wrote scatter plot to $scatterOutput")
+    val xs = (0 to 5).map(_ * 1.0)
+    val ys = xs.map(i => i * i)
+    val scatterPlot = ScatterPlot(xs, ys, layout)
+
+    val scatterOutputHtml =  toPath(outputDir, "scatter-plot.html")
+    val scatterOutputPng = toPath(outputDir, "scatter-plot.png")
+
+    ConvertScatterPlot.writeHtml(scatterPlot, scatterOutputHtml)
+    writeToPng(scatterOutputHtml, scatterOutputPng)(helper)
+    println(s"Wrote scatter plot to $scatterOutputHtml")
+
+  }
+
+  /**
+    * Histogram Plot Demo
+    *
+    * @param helper    Selenium Helper
+    * @param outputDir Root Output Directory of output html and png
+    */
+  def histogramPlotDemo(helper: SeleniumHelper, outputDir: Path) = {
+
+    val numValues = 1000
+
+    val nx = new Gaussian(0, 0.5)
+
+    val exampleDatum = nx.sample(numValues)
+
+    val outputHtml = toPath(outputDir, "histogram-plot.html")
+    val outputPng = toPath(outputDir, "histogram-plot.png")
+
+    println(s"Generating HistogramPlot $outputHtml")
+    val histogramLayout = HistogramLayout("Histogram Plot Demo", "X-label", "Y-label", 0.05)
+    val histogram = HistogramPlot(exampleDatum, histogramLayout)
+
+    ConvertHistogramPlot.writeHtml(histogram, outputHtml)
+    writeToPng(outputHtml, outputPng)(helper)
+
+  }
+
+  def barPlotImplicitDemo(helper: SeleniumHelper, outputDir: Path) = {
+    import HtmlConvertersImplicits._
+
+    val barOutputHtml = toPath(outputDir, "bar-plot2.html")
+    val barOutputPng = toPath(outputDir, "bar-plot2.png")
+
+    println(s"Generating BarChart to $barOutputHtml")
+
+    val barLayout = Layout("Bar Chart", "X-label", "Y-label")
+    val xs = (0 to 100).map(_.toDouble)
+    val ys = xs.map(i => i * i)
+    val barPlot = BarPlot(xs, ys, barLayout)
+
+    // Implicits will convert the types
+    writeToHtml(barPlot, barOutputHtml)
+    writeToPng(barPlot, barOutputPng, helper)
+
+
+  }
+
+
+
+
+  /*
+  Example Demo for Testing
+   */
+  def demo(rootOutputPath: Path) = {
+
+    val sx = SeleniumHelper(100)
+
+    histogramPlotDemo(sx, rootOutputPath)
+
+    barPlotDemo(sx, rootOutputPath)
+
+    scatterPlotDemo(sx, rootOutputPath)
+
+    barPlotImplicitDemo(sx, rootOutputPath)
 
     0
   }
@@ -311,16 +450,6 @@ object ExampleDriver {
 
 
 object Example extends App {
-
-  import ExampleDriver._
-
-  val outputHtml = Paths.get("extras/demo.html").toAbsolutePath
-  val outputPng = Paths.get("extras/demo.png").toAbsolutePath
-
-  demo(outputHtml)
-
-  val sx = SeleniumHelper(100)
-  sx.convertToPng(outputHtml, outputPng)
-
-  println("Exiting main")
+  ExamplePlots.demo(Paths.get("extras").toAbsolutePath)
+  println("Exiting Main.")
 }
