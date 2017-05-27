@@ -1,6 +1,11 @@
 # plotlypad
 
-Offline Scala plotting library using [plotly.js](https://cdn.plot.ly/plotly-latest.min.js) and selenium for static plots.
+**Offline** Scala plotting library using [plotly.js](https://cdn.plot.ly/plotly-latest.min.js) and selenium for static plots.
+
+
+**Note**: This experiment was used to evaluate plotly.js for offline plotting. While this experiment was useful, it was ultimately a dead end and no further development is planned. I believe building off of the visualization grammar of graphics library, [Vega](https://vega.github.io/vega-lite/) and the scala library, [Vegas-Viz](https://github.com/vegas-viz/Vegas) is a more principled foundation for data visualization. 
+
+The original paper describing vega is [here](http://idl.cs.washington.edu/papers/vega-lite/).
 
 
 ### Run Demo
